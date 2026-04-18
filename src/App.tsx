@@ -41,9 +41,11 @@ export default function App() {
     window.speechSynthesis.speak(utter);
   }
 
+  const currentSentenceNote = sentenceNotes[currentIndex] ?? "";
+
   return (
     <main className="app split-layout">
-      <section className="left-pane">
+      <section className="left-pane card pane">
         <h1>English Learning</h1>
         <p className="subtitle">Paste text, split to sentences, and practice reading aloud.</p>
 
@@ -73,17 +75,20 @@ export default function App() {
           </button>
         </div>
 
-        <section className="card">
+        <section className="card sentence-card">
           <h2>
             Sentence {sentences.length ? currentIndex + 1 : 0}/{sentences.length}
           </h2>
           <p>{current || "No sentence available."}</p>
+          <p className="sentence-note-preview">
+            {currentSentenceNote ? `中文：${currentSentenceNote}` : "中文：尚未填寫這一句的翻譯。"}
+          </p>
         </section>
       </section>
 
-      <aside className="right-pane card">
+      <aside className="right-pane card pane">
         <h2>中文說明</h2>
-        <p className="note-help">右側可補上對應段落與句子的中文重點，方便理解與複習。</p>
+        <p className="note-help">右側可補上對應段落與句子的中文重點，句子欄位會跟著目前英文句子切換。</p>
 
         <label htmlFor="paragraph-note">段落中文說明</label>
         <textarea
@@ -96,7 +101,7 @@ export default function App() {
         <label htmlFor="sentence-note">句子中文說明（目前句）</label>
         <textarea
           id="sentence-note"
-          value={sentenceNotes[currentIndex] ?? ""}
+          value={currentSentenceNote}
           onChange={(e) => {
             const value = e.target.value;
             setSentenceNotes((prev) => prev.map((item, index) => (index === currentIndex ? value : item)));

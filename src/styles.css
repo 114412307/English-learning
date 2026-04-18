@@ -22,11 +22,20 @@ body {
   display: grid;
   gap: 20px;
   align-items: start;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .subtitle {
   color: #4b5563;
+}
+
+.pane {
+  padding: 16px;
+}
+
+.pane h1,
+.pane h2 {
+  margin-top: 0;
 }
 
 textarea {
@@ -66,8 +75,7 @@ button:disabled {
 }
 
 .right-pane {
-  position: sticky;
-  top: 16px;
+  position: static;
 }
 
 .note-help {
@@ -81,12 +89,19 @@ button:disabled {
   margin-top: 10px;
 }
 
+.sentence-card {
+  margin-top: 14px;
+}
+
+.sentence-note-preview {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  color: #374151;
+}
+
 @media (max-width: 920px) {
   .split-layout {
     grid-template-columns: 1fr;
-  }
-
-  .right-pane {
-    position: static;
   }
 }
