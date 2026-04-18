@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "English Learning Helper",
+  "description": "逐句閱讀、翻譯與重點螢光標記的英文學習工具。",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "English Learning",
+    "default_popup": "index.html"
+  }
+}
