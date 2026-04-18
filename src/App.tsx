@@ -20,6 +20,11 @@ export default function App() {
     "這段文章在說：把英文學習和自己的興趣連結，會更容易持續；每天慢慢聽、開口跟讀，信心就會提升。",
   );
   const [sentenceNotes, setSentenceNotes] = useState<string[]>([]);
+  const [sourceLang, setSourceLang] = useState("en");
+  const [targetLang, setTargetLang] = useState("zh-TW");
+  const [translatedText, setTranslatedText] = useState("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState("");
 
   const sentences = useMemo(() => splitIntoSentences(rawText), [rawText]);
   const current = sentences[currentIndex] ?? "";
@@ -39,6 +44,46 @@ export default function App() {
     utter.lang = "en-US";
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utter);
+  }
+
+  async function translateText(input: string) {
+    if (!input.trim()) {
+      setTranslatedText("");
+      setTranslateError("");
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslateError("");
+
+    try {
+      const params = new URLSearchParams({
+        client: "gtx",
+        sl: sourceLang,
+        tl: targetLang,
+        dt: "t",
+        q: input,
+      });
+      const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as unknown;
+      if (!Array.isArray(data) || !Array.isArray(data[0])) {
+        throw new Error("Unexpected translate response");
+      }
+
+      const result = data[0]
+        .map((segment) => (Array.isArray(segment) && typeof segment[0] === "string" ? segment[0] : ""))
+        .join("");
+
+      setTranslatedText(result);
+    } catch {
+      setTranslateError("翻譯失敗，請稍後再試或檢查網路連線。");
+    } finally {
+      setIsTranslating(false);
+    }
   }
 
   const currentSentenceNote = sentenceNotes[currentIndex] ?? "";
@@ -89,6 +134,62 @@ export default function App() {
       <aside className="right-pane card pane">
         <h2>中文說明</h2>
         <p className="note-help">右側可補上對應段落與句子的中文重點，句子欄位會跟著目前英文句子切換。</p>
+
+        <section className="card translator-card">
+          <h3>參考 Google 翻譯的快速翻譯</h3>
+          <div className="translator-controls">
+            <label htmlFor="source-lang">
+              原文語言
+              <select id="source-lang" value={sourceLang} onChange={(e) => setSourceLang(e.target.value)}>
+                <option value="auto">自動偵測</option>
+                <option value="en">English</option>
+                <option value="zh-TW">繁體中文</option>
+                <option value="ja">日本語</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (sourceLang === "auto") {
+                  setSourceLang(targetLang);
+                  setTargetLang("en");
+                  return;
+                }
+                setSourceLang(targetLang);
+                setTargetLang(sourceLang);
+              }}
+            >
+              交換語言
+            </button>
+
+            <label htmlFor="target-lang">
+              目標語言
+              <select id="target-lang" value={targetLang} onChange={(e) => setTargetLang(e.target.value)}>
+                <option value="zh-TW">繁體中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="controls">
+            <button onClick={() => translateText(current)} disabled={!current || isTranslating}>
+              {isTranslating ? "翻譯中..." : "翻譯目前句子"}
+            </button>
+            <button onClick={() => translateText(rawText)} disabled={!rawText.trim() || isTranslating}>
+              {isTranslating ? "翻譯中..." : "翻譯整段文章"}
+            </button>
+          </div>
+
+          <textarea
+            value={translatedText}
+            onChange={(e) => setTranslatedText(e.target.value)}
+            placeholder="翻譯結果會顯示在這裡，可直接編輯。"
+            rows={5}
+          />
+          {translateError && <p className="translate-error">{translateError}</p>}
+        </section>
 
         <label htmlFor="paragraph-note">段落中文說明</label>
         <textarea
