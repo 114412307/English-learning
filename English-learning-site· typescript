@@ -1,0 +1,471 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Upload, Play, Pause, ChevronLeft, ChevronRight, Languages, BookOpen, Mic, MicOff, RotateCcw, Volume2, FileText, Eye, EyeOff } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+
+const fallbackMeanings = {
+  improve: "改善、提升",
+  challenge: "挑戰",
+  practice: "練習",
+  language: "語言",
+  article: "文章",
+  sentence: "句子",
+  understand: "理解",
+  learn: "學習",
+  repeat: "重複",
+  explain: "解釋",
+  word: "單字",
+  reading: "閱讀",
+  listen: "聆聽",
+  focus: "專注",
+  progress: "進度",
+  confidence: "自信",
+  ability: "能力",
+  example: "例子",
+  simple: "簡單的",
+  difficult: "困難的",
+  patient: "有耐心的；病人",
+  support: "支持",
+  create: "建立、創造",
+  choose: "選擇",
+  story: "故事",
+  study: "學習；研究",
+  speak: "說",
+  voice: "聲音",
+  remember: "記得",
+  meaning: "意思",
+};
+
+function splitIntoSentences(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .match(/[^.!?。！？\n]+[.!?。！？]?/g)?.map((s) => s.trim()).filter(Boolean) || [];
+}
+
+function tokenize(sentence) {
+  return (sentence.match(/[A-Za-z][A-Za-z'-]*/g) || []).map((w) => w.trim());
+}
+
+function cleanWord(word) {
+  return word.toLowerCase().replace(/[^a-z'-]/g, "");
+}
+
+function getRecognitionConstructor() {
+  if (typeof window === "undefined") return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+export default function EnglishLearningSite() {
+  const [rawText, setRawText] = useState(`Learning English becomes easier when you can connect the content to your own interests. Choose an article you actually want to read. Listen to each sentence slowly, repeat it aloud, and notice how your mouth moves. If you do this every day, your confidence will grow.`);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [rate, setRate] = useState(0.9);
+  const [showMeanings, setShowMeanings] = useState(true);
+  const [selectedWord, setSelectedWord] = useState("");
+  const [customMeanings, setCustomMeanings] = useState({});
+  const [userMeaningInput, setUserMeaningInput] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [recognizedText, setRecognizedText] = useState("");
+  const [recognitionSupported, setRecognitionSupported] = useState(false);
+  const [voices, setVoices] = useState([]);
+  const [voiceName, setVoiceName] = useState("");
+
+  const recognitionRef = useRef(null);
+
+  const sentences = useMemo(() => splitIntoSentences(rawText), [rawText]);
+  const currentSentence = sentences[currentIndex] || "";
+  const words = useMemo(() => tokenize(currentSentence), [currentSentence]);
+
+  const progress = sentences.length ? ((currentIndex + 1) / sentences.length) * 100 : 0;
+
+  useEffect(() => {
+    const loadVoices = () => {
+      const loaded = window.speechSynthesis?.getVoices?.() || [];
+      setVoices(loaded);
+      if (!voiceName && loaded.length) {
+        const preferred = loaded.find((v) => /en|English/i.test(v.lang) || /en/i.test(v.name));
+        setVoiceName(preferred?.name || loaded[0].name);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      setRecognitionSupported(!!getRecognitionConstructor());
+      loadVoices();
+      window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
+    }
+
+    return () => {
+      window.speechSynthesis?.cancel?.();
+    };
+  }, [voiceName]);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+    setRecognizedText("");
+  }, [rawText]);
+
+  const selectedMeaning = selectedWord
+    ? customMeanings[selectedWord] || fallbackMeanings[selectedWord] || "目前沒有內建解釋，你可以自己補上。"
+    : "";
+
+  function speakSentence(text = currentSentence) {
+    if (!text || typeof window === "undefined") return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = rate;
+    utterance.lang = "en-US";
+    const chosenVoice = voices.find((v) => v.name === voiceName);
+    if (chosenVoice) utterance.voice = chosenVoice;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function stopSpeaking() {
+    window.speechSynthesis?.cancel?.();
+    setIsSpeaking(false);
+  }
+
+  function toggleListening() {
+    const Recognition = getRecognitionConstructor();
+    if (!Recognition) return;
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((r) => r[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      setRecognizedText(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = String(e.target?.result || "");
+      setRawText(content);
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  function saveCustomMeaning() {
+    if (!selectedWord || !userMeaningInput.trim()) return;
+    setCustomMeanings((prev) => ({ ...prev, [selectedWord]: userMeaningInput.trim() }));
+    setUserMeaningInput("");
+  }
+
+  function similarityScore(a, b) {
+    const aa = a.toLowerCase().replace(/[^a-z\s']/g, "").trim();
+    const bb = b.toLowerCase().replace(/[^a-z\s']/g, "").trim();
+    if (!aa || !bb) return 0;
+    const aWords = aa.split(/\s+/);
+    const bWords = new Set(bb.split(/\s+/));
+    const matched = aWords.filter((w) => bWords.has(w)).length;
+    return Math.round((matched / aWords.length) * 100);
+  }
+
+  const score = recognizedText ? similarityScore(currentSentence, recognizedText) : 0;
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="grid gap-4 md:grid-cols-[1.3fr_0.9fr]"
+        >
+          <Card className="rounded-3xl border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3 text-2xl">
+                <Languages className="h-6 w-6" />
+                英語逐句跟讀練習站
+              </CardTitle>
+              <p className="text-sm text-slate-500">
+                匯入你感興趣的文章，逐句聽、逐句跟念，也能自由決定要不要看單字意思。
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <Textarea
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  className="min-h-[220px] rounded-2xl"
+                  placeholder="把英文文章貼在這裡…"
+                />
+                <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-center hover:bg-slate-50">
+                  <div className="space-y-2">
+                    <Upload className="mx-auto h-6 w-6" />
+                    <div className="text-sm font-medium">匯入文字檔</div>
+                    <div className="text-xs text-slate-500">支援 .txt</div>
+                  </div>
+                  <input type="file" accept=".txt,text/plain" className="hidden" onChange={handleFileUpload} />
+                </label>
+              </div>
+
+              <div className="grid gap-4 rounded-2xl bg-white p-4 md:grid-cols-4">
+                <div>
+                  <div className="text-xs text-slate-500">句子數</div>
+                  <div className="mt-1 text-2xl font-semibold">{sentences.length}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">目前進度</div>
+                  <div className="mt-1 text-2xl font-semibold">{currentIndex + 1}/{Math.max(sentences.length, 1)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">播放速度</div>
+                  <div className="mt-1 text-2xl font-semibold">{rate.toFixed(1)}x</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <div className="text-xs text-slate-500">顯示單字解釋</div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Switch checked={showMeanings} onCheckedChange={setShowMeanings} />
+                      <span className="text-sm">{showMeanings ? "開啟" : "關閉"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <FileText className="h-5 w-5" />
+                練習設定
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label>朗讀速度</Label>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="1.2"
+                  step="0.1"
+                  value={rate}
+                  onChange={(e) => setRate(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>語音</Label>
+                <select
+                  value={voiceName}
+                  onChange={(e) => setVoiceName(e.target.value)}
+                  className="w-full rounded-2xl border bg-white px-3 py-2 text-sm"
+                >
+                  {voices.map((voice) => (
+                    <option key={voice.name} value={voice.name}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                跟讀功能使用瀏覽器語音辨識。若你的瀏覽器不支援，仍可正常使用逐句播放與單字輔助。
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+          <Card className="rounded-3xl border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-4 text-xl">
+                <span>逐句練習</span>
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  Sentence {Math.min(currentIndex + 1, Math.max(sentences.length, 1))}
+                </Badge>
+              </CardTitle>
+              <Progress value={progress} className="h-2" />
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-3xl bg-slate-50 p-5">
+                <div className="mb-3 text-sm text-slate-500">目前句子</div>
+                <div className="text-2xl font-semibold leading-10 text-slate-900">
+                  {currentSentence || "請先輸入文章內容"}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                  disabled={currentIndex === 0}
+                >
+                  <ChevronLeft className="mr-2 h-4 w-4" /> 上一句
+                </Button>
+                <Button
+                  className="rounded-2xl"
+                  onClick={() => (isSpeaking ? stopSpeaking() : speakSentence())}
+                  disabled={!currentSentence}
+                >
+                  {isSpeaking ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                  {isSpeaking ? "停止播放" : "播放句子"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={toggleListening}
+                  disabled={!currentSentence || !recognitionSupported}
+                >
+                  {isListening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+                  {isListening ? "停止跟讀" : "開始跟讀"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => {
+                    setRecognizedText("");
+                    stopSpeaking();
+                  }}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" /> 重置本句
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => setCurrentIndex((i) => Math.min(sentences.length - 1, i + 1))}
+                  disabled={currentIndex >= sentences.length - 1}
+                >
+                  下一句 <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Volume2 className="h-4 w-4" /> 逐字點選
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {words.length ? words.map((word, idx) => {
+                    const cleaned = cleanWord(word);
+                    return (
+                      <button
+                        key={`${word}-${idx}`}
+                        onClick={() => {
+                          setSelectedWord(cleaned);
+                          setUserMeaningInput(customMeanings[cleaned] || "");
+                        }}
+                        className={`rounded-full border px-3 py-1.5 text-sm transition ${selectedWord === cleaned ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white hover:bg-slate-50"}`}
+                      >
+                        {word}
+                        {showMeanings && cleaned && (
+                          <span className="ml-2 text-xs opacity-80">
+                            · {customMeanings[cleaned] || fallbackMeanings[cleaned] || "點我查看"}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }) : <div className="text-sm text-slate-500">這句還沒有可點選的單字。</div>}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="rounded-3xl border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <BookOpen className="h-5 w-5" /> 單字解釋
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  {showMeanings ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showMeanings ? "目前顯示單字意思" : "目前隱藏單字意思"}
+                </div>
+
+                {selectedWord ? (
+                  <>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="text-xs text-slate-500">選到的單字</div>
+                      <div className="mt-1 text-2xl font-semibold">{selectedWord}</div>
+                      {showMeanings && <div className="mt-3 text-base leading-7 text-slate-700">{selectedMeaning}</div>}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>自訂這個單字的中文意思</Label>
+                      <Input
+                        value={userMeaningInput}
+                        onChange={(e) => setUserMeaningInput(e.target.value)}
+                        placeholder="例如：增強、提升"
+                        className="rounded-2xl"
+                      />
+                      <Button className="w-full rounded-2xl" onClick={saveCustomMeaning}>儲存自訂解釋</Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                    先點一下句子中的單字，這裡就會顯示意思。
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Mic className="h-5 w-5" /> 跟讀結果
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="text-xs text-slate-500">你剛剛念出的內容</div>
+                  <div className="mt-2 min-h-[72px] text-base leading-7 text-slate-800">
+                    {recognizedText || "按下「開始跟讀」後，這裡會出現辨識內容。"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span>大致吻合度</span>
+                    <span className="font-medium">{score}%</span>
+                  </div>
+                  <Progress value={score} className="h-2" />
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                  這裡是簡易比對，主要幫你快速看到是否有念到句子的關鍵詞，不是正式評分系統。
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
