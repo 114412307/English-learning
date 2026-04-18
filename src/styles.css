@@ -13,9 +13,16 @@ body {
 }
 
 .app {
-  max-width: 800px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 24px;
+}
+
+.split-layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
 }
 
 .subtitle {
@@ -56,4 +63,30 @@ button:disabled {
   border-radius: 10px;
   background: #fff;
   padding: 12px;
+}
+
+.right-pane {
+  position: sticky;
+  top: 16px;
+}
+
+.note-help {
+  margin-top: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+}
+
+.right-pane label {
+  display: block;
+  margin-top: 10px;
+}
+
+@media (max-width: 920px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .right-pane {
+    position: static;
+  }
 }
