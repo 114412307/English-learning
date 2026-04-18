@@ -52,19 +52,26 @@ textarea {
   display: flex;
   gap: 8px;
   margin: 12px 0;
+  flex-wrap: wrap;
 }
 
-button {
+button,
+.button-link {
   border: 1px solid #d1d5db;
   background: white;
   border-radius: 8px;
   padding: 8px 12px;
   cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-decoration: none;
 }
 
-button:disabled {
+button:disabled,
+.button-link.disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .card {
@@ -91,6 +98,44 @@ button:disabled {
 
 .sentence-card {
   margin-top: 14px;
+}
+
+.highlighter-card {
+  margin-top: 14px;
+}
+
+.sentence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sentence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.sentence-row.active {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+
+.sentence-row.highlighted {
+  background: #fef9c3;
+}
+
+.sentence-select {
+  text-align: left;
+  white-space: normal;
+}
+
+.highlight-toggle {
+  white-space: nowrap;
 }
 
 .translator-card {
@@ -124,12 +169,6 @@ select {
   background: #fff;
 }
 
-.translate-error {
-  margin: 8px 0 0;
-  color: #b91c1c;
-  font-size: 0.92rem;
-}
-
 .sentence-note-preview {
   margin-top: 10px;
   padding-top: 10px;
@@ -143,6 +182,10 @@ select {
   }
 
   .translator-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .sentence-row {
     grid-template-columns: 1fr;
   }
 }

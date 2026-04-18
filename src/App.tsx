@@ -11,6 +11,17 @@ function splitIntoSentences(text: string) {
   );
 }
 
+function createGoogleTranslateLink(text: string, sourceLang: string, targetLang: string) {
+  const params = new URLSearchParams({
+    sl: sourceLang === "auto" ? "auto" : sourceLang,
+    tl: targetLang,
+    text,
+    op: "translate",
+  });
+
+  return `https://translate.google.com/?${params.toString()}`;
+}
+
 export default function App() {
   const [rawText, setRawText] = useState(
     "Learning English becomes easier when you can connect the content to your own interests. Choose an article you actually want to read. Listen to each sentence slowly, repeat it aloud, and notice how your mouth moves. If you do this every day, your confidence will grow.",
@@ -22,9 +33,7 @@ export default function App() {
   const [sentenceNotes, setSentenceNotes] = useState<string[]>([]);
   const [sourceLang, setSourceLang] = useState("en");
   const [targetLang, setTargetLang] = useState("zh-TW");
-  const [translatedText, setTranslatedText] = useState("");
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [translateError, setTranslateError] = useState("");
+  const [highlightedIndexes, setHighlightedIndexes] = useState<number[]>([]);
 
   const sentences = useMemo(() => splitIntoSentences(rawText), [rawText]);
   const current = sentences[currentIndex] ?? "";
@@ -35,6 +44,7 @@ export default function App() {
       return next;
     });
 
+    setHighlightedIndexes((prev) => prev.filter((index) => index < sentences.length));
     setCurrentIndex((prev) => Math.min(prev, Math.max(sentences.length - 1, 0)));
   }, [sentences]);
 
@@ -46,44 +56,10 @@ export default function App() {
     window.speechSynthesis.speak(utter);
   }
 
-  async function translateText(input: string) {
-    if (!input.trim()) {
-      setTranslatedText("");
-      setTranslateError("");
-      return;
-    }
-
-    setIsTranslating(true);
-    setTranslateError("");
-
-    try {
-      const params = new URLSearchParams({
-        client: "gtx",
-        sl: sourceLang,
-        tl: targetLang,
-        dt: "t",
-        q: input,
-      });
-      const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = (await response.json()) as unknown;
-      if (!Array.isArray(data) || !Array.isArray(data[0])) {
-        throw new Error("Unexpected translate response");
-      }
-
-      const result = data[0]
-        .map((segment) => (Array.isArray(segment) && typeof segment[0] === "string" ? segment[0] : ""))
-        .join("");
-
-      setTranslatedText(result);
-    } catch {
-      setTranslateError("翻譯失敗，請稍後再試或檢查網路連線。");
-    } finally {
-      setIsTranslating(false);
-    }
+  function toggleHighlight(index: number) {
+    setHighlightedIndexes((prev) =>
+      prev.includes(index) ? prev.filter((item) => item !== index) : [...prev, index].sort((a, b) => a - b),
+    );
   }
 
   const currentSentenceNote = sentenceNotes[currentIndex] ?? "";
@@ -92,7 +68,7 @@ export default function App() {
     <main className="app split-layout">
       <section className="left-pane card pane">
         <h1>English Learning</h1>
-        <p className="subtitle">Paste text, split to sentences, and practice reading aloud.</p>
+        <p className="subtitle">改為 Google 翻譯外掛式流程：逐句閱讀、逐句翻譯、逐句螢光標記。</p>
 
         <label htmlFor="article">Article</label>
         <textarea
@@ -129,6 +105,32 @@ export default function App() {
             {currentSentenceNote ? `中文：${currentSentenceNote}` : "中文：尚未填寫這一句的翻譯。"}
           </p>
         </section>
+
+        <section className="card highlighter-card">
+          <h3>逐句螢光筆</h3>
+          <p className="note-help">點每一句可切換目前句，按「螢光筆」可標記重點。</p>
+          <div className="sentence-list" role="list">
+            {sentences.map((sentence, index) => {
+              const isActive = index === currentIndex;
+              const isHighlighted = highlightedIndexes.includes(index);
+
+              return (
+                <div
+                  key={`${sentence}-${index}`}
+                  className={`sentence-row ${isActive ? "active" : ""} ${isHighlighted ? "highlighted" : ""}`}
+                  role="listitem"
+                >
+                  <button type="button" className="sentence-select" onClick={() => setCurrentIndex(index)}>
+                    {index + 1}. {sentence}
+                  </button>
+                  <button type="button" className="highlight-toggle" onClick={() => toggleHighlight(index)}>
+                    {isHighlighted ? "取消螢光" : "螢光筆"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </section>
 
       <aside className="right-pane card pane">
@@ -136,7 +138,7 @@ export default function App() {
         <p className="note-help">右側可補上對應段落與句子的中文重點，句子欄位會跟著目前英文句子切換。</p>
 
         <section className="card translator-card">
-          <h3>參考 Google 翻譯的快速翻譯</h3>
+          <h3>Google 翻譯外掛（逐句）</h3>
           <div className="translator-controls">
             <label htmlFor="source-lang">
               原文語言
@@ -174,21 +176,36 @@ export default function App() {
           </div>
 
           <div className="controls">
-            <button onClick={() => translateText(current)} disabled={!current || isTranslating}>
-              {isTranslating ? "翻譯中..." : "翻譯目前句子"}
-            </button>
-            <button onClick={() => translateText(rawText)} disabled={!rawText.trim() || isTranslating}>
-              {isTranslating ? "翻譯中..." : "翻譯整段文章"}
-            </button>
+            <a
+              className={`button-link ${!current ? "disabled" : ""}`}
+              href={current ? createGoogleTranslateLink(current, sourceLang, targetLang) : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!current}
+              onClick={(e) => {
+                if (!current) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              翻譯目前句子
+            </a>
+            <a
+              className={`button-link ${!rawText.trim() ? "disabled" : ""}`}
+              href={rawText.trim() ? createGoogleTranslateLink(rawText, sourceLang, targetLang) : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!rawText.trim()}
+              onClick={(e) => {
+                if (!rawText.trim()) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              翻譯整段文章
+            </a>
           </div>
-
-          <textarea
-            value={translatedText}
-            onChange={(e) => setTranslatedText(e.target.value)}
-            placeholder="翻譯結果會顯示在這裡，可直接編輯。"
-            rows={5}
-          />
-          {translateError && <p className="translate-error">{translateError}</p>}
+          <p className="note-help">會開啟 translate.google.com，像使用翻譯插件一樣快速查看結果。</p>
         </section>
 
         <label htmlFor="paragraph-note">段落中文說明</label>
